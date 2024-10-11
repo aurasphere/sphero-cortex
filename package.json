@@ -1,0 +1,19 @@
+{
+  "name": "sphero",
+  "description": "Sphero controller",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git",
+  "author": "Donato Rimenti",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "robotjs": "^0.6.0",
+    "ws": "^8.18.0"
+  }
+}
