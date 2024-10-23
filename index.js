@@ -4,6 +4,11 @@ import WebSocket from "ws";
 
 dotenv.config();
 
+const USE_RAW_BANDS = true;
+const PROFILE_NAME = "Donato";
+const MENTAL_COMMAND_THRESHOLD = 0.7;
+const COMMAND_THRESHOLD_COUNTER = 10;
+
 function createEmotivRequest(id, method, params) {
   return {
     id,
@@ -92,10 +97,18 @@ function handleAuthenticationFlow({ result, id }) {
       break;
     case 6:
       sessionId = result.id;
-      sendCommand(7, "subscribe", {
+      sendCommand(7, "setupProfile", {
+        cortexToken: cortexToken,
+        status: "load",
+        profile: PROFILE_NAME,
+        headset: headsetId,
+      });
+      break;
+    case 7:
+      sendCommand(8, "subscribe", {
         cortexToken: cortexToken,
         session: sessionId,
-        streams: ["pow", "eq"],
+        streams: ["eq", USE_RAW_BANDS ? "pow" : "com"],
       });
       break;
   }
@@ -113,7 +126,6 @@ function handleSubscriptionData(data) {
   }
 }
 
-let eyesClosedCounter = 0;
 function handleBandPower({ pow }) {
   // console.log(`Received band power data ${JSON.stringify(pow)}`);
   const [
@@ -150,15 +162,11 @@ function handleBandPower({ pow }) {
   const avgTheta = average([af3Theta, t7Theta, t8Theta]);
   console.log({ avgAlpha, avgBetaL, avgBetaH, avgGamma, avgTheta });
   if (avgAlpha > 3 && avgTheta > 4) {
-    eyesClosedCounter++;
+    commandThresholdCounter++;
   } else {
-    eyesClosedCounter = 0;
+    commandThresholdCounter = 0;
   }
-  if (eyesClosedCounter > 10) {
-    console.log("\x07");
-    eyesClosedCounter = 0;
-    throttledClickFunction();
-  }
+  checkCommandThresholdCounter();
 }
 
 function average(values) {
@@ -167,6 +175,23 @@ function average(values) {
 
 function handleMentalCommand({ com }) {
   console.log(`Received mental command data ${JSON.stringify(com)}`);
+  const [command, power] = com;
+  if (command === "push") {
+    console.log(`Pushing with power ${power} for ${commandThresholdCounter}`);
+    if (power > MENTAL_COMMAND_THRESHOLD) {
+      commandThresholdCounter++;
+      checkCommandThresholdCounter();
+    }
+  }
+}
+
+let commandThresholdCounter = 0;
+function checkCommandThresholdCounter() {
+  if (commandThresholdCounter > COMMAND_THRESHOLD_COUNTER) {
+    console.log("\x07");
+    commandThresholdCounter = 0;
+    throttledClickFunction();
+  }
 }
 
 function handleEegQuality({ eq }) {
@@ -176,7 +201,7 @@ function handleEegQuality({ eq }) {
     console.error(
       `Poor eeg quality (${averageUsedSensorQuality}), disabling output`
     );
-    eyesClosedCounter = 0;
+    commandThresholdCounter = 0;
   }
 }
 
